@@ -55,22 +55,40 @@ class Tokenizer {
     // Load vocab
     this.vocab = this.tokenizerSettings.model.vocab;
 
+    // Load merges
+    this.merges = this.tokenizerSettings.model.merges.map((merge) => merge.split(' '));
+    this.mergesMap = new Map(this.merges);
+
     // Load reverse vocab
     this.reverseVocab = Object.fromEntries(Object.entries(this.vocab).map(([k, v]) => [v, k]));
   }
 
-  async encode(text) {
-    // Normalize text
-    text = this.normalize(text, this.tokenizerSettings['normalizer']);
+  encode(text) {
+    // Initial tokenization: split the text into characters
+    let tokens = text
+      .split(' ')
+      .map((word) => word.split(''))
+      .flat();
 
-    // Simplified tokenization (a full BPE implementation would be required for a complete solution)
-    const tokens = text.split(' '); // This is a placeholder
+    // Convert characters to tokens based on the vocab
+    tokens = tokens.map((char) => (this.vocab[char] ? char : '<unk>'));
 
-    // Apply post-processing (simplified version)
-    text = `<s> ${tokens.join(' ')} </s>`;
+    // Apply merges
+    let canMerge = true;
+    while (canMerge) {
+      canMerge = false;
+      for (let i = 0; i < tokens.length - 1; i++) {
+        const mergeCandidate = tokens[i] + ' ' + tokens[i + 1];
+        if (this.mergesMap.has(mergeCandidate)) {
+          tokens.splice(i, 2, tokens[i] + tokens[i + 1]);
+          canMerge = true;
+          break; // Start over after each merge
+        }
+      }
+    }
 
-    // Convert tokens to IDs (this requires a full BPE implementation and vocab mapping)
-    return tokens.map((token) => this.vocab[token] || this.vocab['<unk>']); // Placeholder for actual token to ID conversion
+    // Convert tokens to IDs
+    return tokens.map((token) => this.vocab[token] || this.vocab['<unk>']);
   }
 
   async decode(tokenIds) {
