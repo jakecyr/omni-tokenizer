@@ -64,46 +64,54 @@ class Tokenizer {
   }
 
   encode(text) {
-    // Initial tokenization: split the text into characters
-    let tokens = text
-      .split(' ')
-      .map((word) => word.split(''))
-      .flat();
+    // Normalize text by replacing spaces with "▁" as per tokenizer configuration
+    let normalizedText = text.replace(/ /g, '▁');
 
-    // Convert characters to tokens based on the vocab
-    tokens = tokens.map((char) => (this.vocab[char] ? char : '<unk>'));
+    // Initial tokenization: Instead of splitting into characters directly,
+    // start with the normalized text which includes "▁" for spaces.
+    let tokens = normalizedText.split('');
 
-    // Apply merges
+    // Apply merges based on the mergesMap
     let canMerge = true;
     while (canMerge) {
       canMerge = false;
       for (let i = 0; i < tokens.length - 1; i++) {
-        const mergeCandidate = tokens[i] + ' ' + tokens[i + 1];
+        // Generate merge candidates based on the current and next token.
+        // This now respects the "▁" character used for spaces.
+        const mergeCandidate = tokens[i] + tokens[i + 1];
+
+        // Check if this mergeCandidate exists in our merges map.
+        // Since we're directly concatenating tokens[i] and tokens[i + 1],
+        // there's no need to insert a space between them in this lookup.
         if (this.mergesMap.has(mergeCandidate)) {
-          tokens.splice(i, 2, tokens[i] + tokens[i + 1]);
-          canMerge = true;
-          break; // Start over after each merge
+          // Perform the merge by replacing the two tokens with their merged form
+          tokens.splice(i, 2, mergeCandidate);
+          canMerge = true; // Allow the process to continue
+          break; // Exit the loop to start the merge process from the beginning
         }
       }
     }
 
-    // Convert tokens to IDs
+    // Convert tokens to IDs, handling unknown tokens with '<unk>'
     return tokens.map((token) => this.vocab[token] || this.vocab['<unk>']);
   }
 
-  async decode(tokenIds) {
+  decode(tokenIds) {
     // Convert token IDs back to tokens
-    const tokens = tokenIds.map(id => this.reverseVocab[id] || '<unk>');
-  
-    // Simple approach to improve readability by removing unnecessary spaces
-    // Note: This does not accurately reverse BPE merges
-    let text = tokens.join('');
-    text = text.replace(/<unk>/g, ' '); // Replace <unk> with space for readability
-    // Further processing could be added here to handle other special tokens and formatting
-  
-    return text;
+    const tokens = tokenIds.map((id) => this.reverseVocab[id] || '<unk>');
+
+    // Join tokens to form a single string
+    let decodedText = tokens.join('');
+
+    // Apply decoding steps as specified in tokenizer.json
+    // Specifically, replace "▁" with a space
+    decodedText = decodedText.replace(/▁/g, ' ');
+
+    // Optional: Post-processing to clean up the text
+    decodedText = decodedText.trim().replace(/\s+/g, ' ');
+
+    return decodedText;
   }
-  
 
   normalize(text, normalizerSettings) {
     // Apply each normalization step
