@@ -1,6 +1,6 @@
 {
   "name": "omni-tokenizer",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Node based tokenizers for open source models hosted on HuggingFace.",
   "main": "src/tokenizer.js",
   "repository": {
@@ -16,5 +16,8 @@
   ],
   "dependencies": {
     "@huggingface/hub": "^0.14.3"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.5"
   }
 }

@@ -2,6 +2,7 @@ const { listFiles, downloadFile } = require('@huggingface/hub');
 const fs = require('fs/promises');
 const crypto = require('crypto');
 const { fileExists } = require('./utils');
+const path = require('path');
 
 const TOKENIZER_FILES = {
   'tokenizer.json': 1,
@@ -17,39 +18,46 @@ class Tokenizer {
     this.cacheFolderPath = cacheFolderPath;
     this.repoName = repoName;
     this.dirname = crypto.createHash('md5').update(repoName).digest('hex');
-    this.dirpath = `./${this.cacheFolderPath}/${this.dirname}`;
+    this.dirpath = path.join(this.cacheFolderPath, this.dirname);
     this.tokenizerSettings = null;
     this.vocab = null;
     this.reverseVocab = null;
   }
 
-  async initializeFromHuggingFace() {
+  async initializeFromHuggingFace(accessToken) {
     await fs.mkdir(this.dirpath, { recursive: true });
 
     for await (const file of listFiles({
       repo: this.repoName,
+      credentials: { accessToken },
     })) {
       if (file.path in TOKENIZER_FILES) {
         const downloadedFile = await (
           await downloadFile({
             repo: this.repoName,
             path: file.path,
+            credentials: { accessToken },
           })
         )?.text();
 
-        await fs.writeFile(`./${this.dirpath}/${file.path}`, downloadedFile);
+        await fs.writeFile(path.join(this.dirpath, file.path), downloadedFile);
       }
     }
   }
 
-  async load() {
+  async load(accessToken = null) {
     if (!(await fileExists(this.dirpath))) {
-      await this.initializeFromHuggingFace();
+      await this.initializeFromHuggingFace(accessToken);
     }
 
     // Load tokenizer settings.
     this.tokenizerSettings = JSON.parse(
-      await fs.readFile(`./${this.dirpath}/tokenizer.json`, 'utf8'),
+      await fs.readFile(path.join(this.dirpath, 'tokenizer.json'), 'utf8'),
+    );
+
+    // Load tokenizer config file.
+    this.tokenizerConfig = JSON.parse(
+      await fs.readFile(path.join(this.dirpath, 'tokenizer_config.json'), 'utf8'),
     );
 
     // Load vocab
@@ -64,6 +72,15 @@ class Tokenizer {
   }
 
   encode(text) {
+    const bosToken = this.tokenizerSettings.add_bos_token
+      ? this.tokenizerConfig.bos_token || '<s>'
+      : '';
+    const eosToken = this.tokenizerSettings.add_eos_token
+      ? this.tokenizerConfig.eos_token || '</s>'
+      : '';
+
+    text = bosToken + text + eosToken;
+
     // Normalize text by replacing spaces with "▁" as per tokenizer configuration
     const normalizedText = text.replace(/ /g, '▁');
 
@@ -100,15 +117,33 @@ class Tokenizer {
     // Convert token IDs back to tokens
     const tokens = tokenIds.map((id) => this.reverseVocab[id] || '<unk>');
 
-    // Join tokens to form a single string
-    let decodedText = tokens.join('');
+    // Initialize an array to accumulate the decoded tokens
+    let decodedTokens = [];
 
-    // Apply decoding steps as specified in tokenizer.json
-    // Specifically, replace "▁" with a space
+    tokens.forEach((token) => {
+      if (token === '<unk>') {
+        // Handle unknown tokens. You can choose to ignore, replace with a placeholder, or keep as is.
+        decodedTokens.push('UNKNOWN');
+      } else if (token !== '<s>' && token !== '</s>') {
+        // Ignore start and end tokens in the decoded text, or handle them according to your needs.
+        // If you decide to keep <s> and </s> tokens for any reason, just remove or adjust this condition.
+        decodedTokens.push(token);
+      }
+      // Note: If there are other special tokens you wish to handle differently, add conditions here.
+    });
+
+    // Join the processed tokens into a single string
+    let decodedText = decodedTokens.join('');
+
+    // Replace "▁" with a space as part of the decoding process
     decodedText = decodedText.replace(/▁/g, ' ');
 
     // Optional: Post-processing to clean up the text
-    return decodedText.trim().replace(/\s+/g, ' ');
+    // This includes trimming whitespace from the start and end of the text,
+    // and replacing instances of multiple spaces with a single space.
+    decodedText = decodedText.trim().replace(/\s+/g, ' ');
+
+    return decodedText;
   }
 }
 
