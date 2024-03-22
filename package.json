@@ -17,8 +17,5 @@
   ],
   "dependencies": {
     "@huggingface/hub": "^0.14.3"
-  },
-  "devDependencies": {
-    "dotenv": "^16.4.5"
   }
 }

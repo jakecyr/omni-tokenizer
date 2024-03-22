@@ -1,7 +1,4 @@
 const { Tokenizer } = require('../src/tokenizer');
-const { config } = require('dotenv');
-
-config();
 
 (async () => {
   const tokenizer = new Tokenizer('google/gemma-2b');
