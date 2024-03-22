@@ -5,9 +5,6 @@
   "main": "src/main.js",
   "author": "Jake Cyr",
   "license": "ISC",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "keywords": [
     "tokenizer",
     "mistral",
