@@ -1,4 +1,4 @@
-# Omni Tokenizers
+# Omni Tokenizer
 
 A Node based tokenizer for open source models hosted on HuggingFace.
 

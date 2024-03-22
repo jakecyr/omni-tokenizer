@@ -1,6 +1,6 @@
 {
   "name": "omni-tokenizer",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Node based tokenizers for open source models hosted on HuggingFace.",
   "author": "Jake Cyr",
   "license": "ISC",
