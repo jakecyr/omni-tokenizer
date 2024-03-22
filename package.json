@@ -12,7 +12,8 @@
   "keywords": [
     "tokenizer",
     "mistral",
-    "mixtral"
+    "mixtral",
+    "gemma"
   ],
   "dependencies": {
     "@huggingface/hub": "^0.14.3"
