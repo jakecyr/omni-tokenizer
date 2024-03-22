@@ -1,7 +1,7 @@
 import { Tokenizer } from '../src/tokenizer';
-import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
+import { hashString } from '../src/utils';
 
 describe('Tokenizer', () => {
   describe('load', () => {
@@ -9,7 +9,7 @@ describe('Tokenizer', () => {
       const repoName = 'mistralai/Mixtral-8x7B-v0.1';
       const cacheFolder = './cache';
       const tokenizer = new Tokenizer(repoName, cacheFolder);
-      const hash = crypto.createHash('md5').update(repoName).digest('hex');
+      const hash = hashString(repoName);
       const localRepoPath = path.join(cacheFolder, hash);
 
       if (fs.existsSync(localRepoPath)) {
@@ -25,7 +25,7 @@ describe('Tokenizer', () => {
       const repoName = 'mistralai/Mixtral-8x7B-v0.1';
       const cacheFolder = './cache';
       const tokenizer = new Tokenizer(repoName, cacheFolder);
-      const hash = crypto.createHash('md5').update(repoName).digest('hex');
+      const hash = hashString(repoName);
       const localRepoPath = path.join(cacheFolder, hash);
 
       if (fs.existsSync(localRepoPath)) {

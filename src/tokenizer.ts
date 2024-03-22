@@ -1,7 +1,6 @@
 import { listFiles, downloadFile } from '@huggingface/hub';
 import fs from 'fs/promises';
-import crypto from 'crypto';
-import { fileExists } from './utils';
+import { fileExists, hashString } from './utils';
 import path from 'path';
 import { TokenizerConfig } from './TokenizerConfig';
 
@@ -24,36 +23,18 @@ export class Tokenizer {
   vocab: Record<string, number>;
   reverseVocab: Record<number, string>;
   mergesMap: Map<string, string>;
+  specialTokensMap: Record<string, string>;
 
   constructor(repoName: string, cacheFolderPath: string = './cache') {
     this.cacheFolderPath = cacheFolderPath;
     this.repoName = repoName;
-    this.dirName = crypto.createHash('md5').update(repoName).digest('hex');
+    this.dirName = hashString(repoName);
     this.dirPath = path.join(this.cacheFolderPath, this.dirName);
     this.tokenizerSettings = null;
     this.vocab = null;
     this.reverseVocab = null;
-  }
-
-  async initializeFromHuggingFace(accessToken?: string): Promise<void> {
-    await fs.mkdir(this.dirPath, { recursive: true });
-
-    for await (const file of listFiles({
-      repo: this.repoName,
-      credentials: { accessToken },
-    })) {
-      if (file.path in TOKENIZER_FILES) {
-        const downloadedFile = await (
-          await downloadFile({
-            repo: this.repoName,
-            path: file.path,
-            credentials: { accessToken },
-          })
-        )?.text();
-
-        await fs.writeFile(path.join(this.dirPath, file.path), downloadedFile);
-      }
-    }
+    // Initialize the special tokens map
+    this.specialTokensMap = {};
   }
 
   async load(accessToken = null): Promise<void> {
@@ -71,6 +52,10 @@ export class Tokenizer {
       await fs.readFile(path.join(this.dirPath, 'tokenizer_config.json'), 'utf8'),
     );
 
+    if (this.tokenizerSettings.model.type !== 'BPE') {
+      throw new Error('Only BPE models are currently supported.');
+    }
+
     // Load vocab
     this.vocab = this.tokenizerSettings.model.vocab;
 
@@ -80,24 +65,24 @@ export class Tokenizer {
 
     // Load reverse vocab
     this.reverseVocab = Object.fromEntries(Object.entries(this.vocab).map(([k, v]) => [v, k]));
+
+    await this.loadSpecialTokenConfig();
   }
 
   encode(text: string): number[] {
-    const bosToken = this.tokenizerSettings.add_bos_token
-      ? this.tokenizerConfig.bos_token || '<s>'
+    const bosToken: string = this.tokenizerSettings.add_bos_token
+      ? this.tokenizerConfig.bos_token || this.specialTokensMap.bos_token
       : '';
-    const eosToken = this.tokenizerSettings.add_eos_token
-      ? this.tokenizerConfig.eos_token || '</s>'
+    const eosToken: string = this.tokenizerSettings.add_eos_token
+      ? this.tokenizerConfig.eos_token || this.specialTokensMap.eos_token
       : '';
-
-    text = bosToken + text + eosToken;
 
     // Normalize text by replacing spaces with "▁" as per tokenizer configuration
-    const normalizedText = text.replace(/ /g, '▁');
+    const normalizedText: string = (bosToken + text + eosToken).replace(/ /g, '▁');
 
     // Initial tokenization: Instead of splitting into characters directly,
     // start with the normalized text which includes "▁" for spaces.
-    const tokens = normalizedText.split('');
+    const tokens: string[] = normalizedText.split('');
 
     // Apply merges based on the mergesMap
     let canMerge = true;
@@ -121,21 +106,23 @@ export class Tokenizer {
     }
 
     // Convert tokens to IDs, handling unknown tokens with '<unk>'
-    return tokens.map((token) => this.vocab[token] || this.vocab['<unk>']);
+    return tokens.map((token: string) => this.vocab[token] || this.vocab['<unk>']);
   }
 
   decode(tokenIds: number[]): string {
     // Convert token IDs back to tokens
-    const tokens = tokenIds.map((id) => this.reverseVocab[id] || '<unk>');
+    const tokens = tokenIds.map((id) => this.reverseVocab[id] || this.specialTokensMap.unk_token);
 
     // Initialize an array to accumulate the decoded tokens
-    const decodedTokens = [];
+    const decodedTokens: string[] = [];
 
     tokens.forEach((token) => {
-      if (token === '<unk>') {
+      if (token === this.specialTokensMap.unk_token) {
         // Handle unknown tokens. You can choose to ignore, replace with a placeholder, or keep as is.
         decodedTokens.push('UNKNOWN');
-      } else if (token !== '<s>' && token !== '</s>') {
+      } else if (
+        ![this.specialTokensMap.bos_token, this.specialTokensMap.eos_token].includes(token)
+      ) {
         // Ignore start and end tokens in the decoded text, or handle them according to your needs.
         // If you decide to keep <s> and </s> tokens for any reason, just remove or adjust this condition.
         decodedTokens.push(token);
@@ -144,7 +131,7 @@ export class Tokenizer {
     });
 
     // Join the processed tokens into a single string
-    let decodedText = decodedTokens.join('');
+    let decodedText: string = decodedTokens.join('');
 
     // Replace "▁" with a space as part of the decoding process
     decodedText = decodedText.replace(/▁/g, ' ');
@@ -155,5 +142,35 @@ export class Tokenizer {
     decodedText = decodedText.trim().replace(/\s+/g, ' ');
 
     return decodedText;
+  }
+
+  private async initializeFromHuggingFace(accessToken?: string): Promise<void> {
+    await fs.mkdir(this.dirPath, { recursive: true });
+
+    for await (const file of listFiles({
+      repo: this.repoName,
+      credentials: { accessToken },
+    })) {
+      if (file.path in TOKENIZER_FILES) {
+        const downloadedFile = await (
+          await downloadFile({
+            repo: this.repoName,
+            path: file.path,
+            credentials: { accessToken },
+          })
+        )?.text();
+
+        await fs.writeFile(path.join(this.dirPath, file.path), downloadedFile);
+      }
+    }
+  }
+
+  private async loadSpecialTokenConfig(): Promise<void> {
+    const specialTokensMapPath = path.join(this.dirPath, 'special_tokens_map.json');
+
+    if (await fileExists(specialTokensMapPath)) {
+      const specialTokensMapContent = await fs.readFile(specialTokensMapPath, 'utf8');
+      this.specialTokensMap = JSON.parse(specialTokensMapContent);
+    }
   }
 }
