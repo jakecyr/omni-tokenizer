@@ -65,11 +65,11 @@ class Tokenizer {
 
   encode(text) {
     // Normalize text by replacing spaces with "▁" as per tokenizer configuration
-    let normalizedText = text.replace(/ /g, '▁');
+    const normalizedText = text.replace(/ /g, '▁');
 
     // Initial tokenization: Instead of splitting into characters directly,
     // start with the normalized text which includes "▁" for spaces.
-    let tokens = normalizedText.split('');
+    const tokens = normalizedText.split('');
 
     // Apply merges based on the mergesMap
     let canMerge = true;
@@ -108,31 +108,7 @@ class Tokenizer {
     decodedText = decodedText.replace(/▁/g, ' ');
 
     // Optional: Post-processing to clean up the text
-    decodedText = decodedText.trim().replace(/\s+/g, ' ');
-
-    return decodedText;
-  }
-
-  normalize(text, normalizerSettings) {
-    // Apply each normalization step
-    normalizerSettings.normalizers.forEach((normalizer) => {
-      if (normalizer.type === 'Replace' && normalizer.pattern.String === ' ') {
-        text = text.replace(new RegExp(' ', 'g'), normalizer.content);
-      }
-      // Implement other normalizers as needed
-    });
-    return text;
-  }
-
-  denormalize(text, decoderSettings) {
-    // Apply each decoding step
-    decoderSettings.decoders.forEach((decoder) => {
-      if (decoder.type === 'Replace' && decoder.pattern.String === '▁') {
-        text = text.replace(new RegExp('▁', 'g'), decoder.content);
-      }
-      // Implement other decoders as needed
-    });
-    return text;
+    return decodedText.trim().replace(/\s+/g, ' ');
   }
 }
 
