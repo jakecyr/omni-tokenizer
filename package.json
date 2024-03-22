@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Node based tokenizers for open source models hosted on HuggingFace.",
   "main": "src/tokenizer.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jakecyr/omni-tokenizer.git"
+  },
   "author": "Jake Cyr",
   "license": "ISC",
   "keywords": [
