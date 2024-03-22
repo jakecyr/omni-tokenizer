@@ -1,4 +1,4 @@
-const { Tokenizer } = require('../src/tokenizer');
+const { Tokenizer } = require('../dist/tokenizer');
 
 (async () => {
   const tokenizer = new Tokenizer('google/gemma-2b');

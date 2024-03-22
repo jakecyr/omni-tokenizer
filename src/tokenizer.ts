@@ -1,8 +1,9 @@
-const { listFiles, downloadFile } = require('@huggingface/hub');
-const fs = require('fs/promises');
-const crypto = require('crypto');
-const { fileExists } = require('./utils');
-const path = require('path');
+import { listFiles, downloadFile } from '@huggingface/hub';
+import fs from 'fs/promises';
+import crypto from 'crypto';
+import { fileExists } from './utils';
+import path from 'path';
+import { TokenizerConfig } from './TokenizerConfig';
 
 const TOKENIZER_FILES = {
   'tokenizer.json': 1,
@@ -13,19 +14,29 @@ const TOKENIZER_FILES = {
   'added_tokens.json': 1,
 };
 
-class Tokenizer {
-  constructor(repoName, cacheFolderPath = './cache') {
+export class Tokenizer {
+  cacheFolderPath: string;
+  repoName: string;
+  dirName: string;
+  dirPath: string;
+  tokenizerSettings: Record<string, any>;
+  tokenizerConfig: TokenizerConfig;
+  vocab: Record<string, number>;
+  reverseVocab: Record<number, string>;
+  mergesMap: Map<string, string>;
+
+  constructor(repoName: string, cacheFolderPath: string = './cache') {
     this.cacheFolderPath = cacheFolderPath;
     this.repoName = repoName;
-    this.dirname = crypto.createHash('md5').update(repoName).digest('hex');
-    this.dirpath = path.join(this.cacheFolderPath, this.dirname);
+    this.dirName = crypto.createHash('md5').update(repoName).digest('hex');
+    this.dirPath = path.join(this.cacheFolderPath, this.dirName);
     this.tokenizerSettings = null;
     this.vocab = null;
     this.reverseVocab = null;
   }
 
-  async initializeFromHuggingFace(accessToken) {
-    await fs.mkdir(this.dirpath, { recursive: true });
+  async initializeFromHuggingFace(accessToken?: string): Promise<void> {
+    await fs.mkdir(this.dirPath, { recursive: true });
 
     for await (const file of listFiles({
       repo: this.repoName,
@@ -40,38 +51,38 @@ class Tokenizer {
           })
         )?.text();
 
-        await fs.writeFile(path.join(this.dirpath, file.path), downloadedFile);
+        await fs.writeFile(path.join(this.dirPath, file.path), downloadedFile);
       }
     }
   }
 
-  async load(accessToken = null) {
-    if (!(await fileExists(this.dirpath))) {
+  async load(accessToken = null): Promise<void> {
+    if (!(await fileExists(this.dirPath))) {
       await this.initializeFromHuggingFace(accessToken);
     }
 
     // Load tokenizer settings.
     this.tokenizerSettings = JSON.parse(
-      await fs.readFile(path.join(this.dirpath, 'tokenizer.json'), 'utf8'),
+      await fs.readFile(path.join(this.dirPath, 'tokenizer.json'), 'utf8'),
     );
 
     // Load tokenizer config file.
     this.tokenizerConfig = JSON.parse(
-      await fs.readFile(path.join(this.dirpath, 'tokenizer_config.json'), 'utf8'),
+      await fs.readFile(path.join(this.dirPath, 'tokenizer_config.json'), 'utf8'),
     );
 
     // Load vocab
     this.vocab = this.tokenizerSettings.model.vocab;
 
     // Load merges
-    this.merges = this.tokenizerSettings.model.merges.map((merge) => merge.split(' '));
-    this.mergesMap = new Map(this.merges);
+    const merges = this.tokenizerSettings.model.merges.map((merge) => merge.split(' '));
+    this.mergesMap = new Map(merges);
 
     // Load reverse vocab
     this.reverseVocab = Object.fromEntries(Object.entries(this.vocab).map(([k, v]) => [v, k]));
   }
 
-  encode(text) {
+  encode(text: string): number[] {
     const bosToken = this.tokenizerSettings.add_bos_token
       ? this.tokenizerConfig.bos_token || '<s>'
       : '';
@@ -113,12 +124,12 @@ class Tokenizer {
     return tokens.map((token) => this.vocab[token] || this.vocab['<unk>']);
   }
 
-  decode(tokenIds) {
+  decode(tokenIds: number[]): string {
     // Convert token IDs back to tokens
     const tokens = tokenIds.map((id) => this.reverseVocab[id] || '<unk>');
 
     // Initialize an array to accumulate the decoded tokens
-    let decodedTokens = [];
+    const decodedTokens = [];
 
     tokens.forEach((token) => {
       if (token === '<unk>') {
@@ -146,7 +157,3 @@ class Tokenizer {
     return decodedText;
   }
 }
-
-module.exports = {
-  Tokenizer,
-};
