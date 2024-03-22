@@ -92,12 +92,18 @@ class Tokenizer {
   }
 
   async decode(tokenIds) {
-    // Convert token IDs to tokens
-    const text = tokenIds.map((id) => this.reverseVocab[id] || '<unk>').join(' '); // Placeholder
-
-    // Normalize text (simplified)
-    return this.denormalize(text, this.tokenizerSettings['decoder']);
+    // Convert token IDs back to tokens
+    const tokens = tokenIds.map(id => this.reverseVocab[id] || '<unk>');
+  
+    // Simple approach to improve readability by removing unnecessary spaces
+    // Note: This does not accurately reverse BPE merges
+    let text = tokens.join('');
+    text = text.replace(/<unk>/g, ' '); // Replace <unk> with space for readability
+    // Further processing could be added here to handle other special tokens and formatting
+  
+    return text;
   }
+  
 
   normalize(text, normalizerSettings) {
     // Apply each normalization step
